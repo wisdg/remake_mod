@@ -48,8 +48,8 @@ importers:
         specifier: ^8.0.0
         version: 8.0.0(@types/react@19.3.0)(react-devtools-core@8.0.0)(react@19.3.1)
       ink-scroll-view:
-        specifier: ^0.4.0
-        version: 0.4.0(ink@8.0.0(@types/react@19.3.0)(react-devtools-core@8.0.0)(react@19.3.1))(react@19.3.1)
+        specifier: ^0.4.1
+        version: 0.4.1(ink@8.0.0(@types/react@19.3.0)(react-devtools-core@8.0.0)(react@19.3.1))(react@19.3.1)
       jotai:
         specifier: ^3.0.1
         version: 3.0.1(@types/react@19.3.0)(react@19.3.1)
@@ -1247,10 +1247,10 @@ packages:
     resolution: {integrity: sha512-m6FAo/spmsW2Ab2fU35JTYwtOKa2yAwXSwgjSv1TJzh4Mh7mC3lzAOVLBprb72XsTrgkEIsl7YrFNAiDiRhIGg==}
     engines: {node: '>=12'}
 
-  ink-scroll-view@0.4.0:
-    resolution: {integrity: sha512-MRUurhUNzQkZzA2D2q8hPb+JzOiD67x14WKlcoqmBLTukrUeKOp+5NOq8gKNubRG5v8r01sMGw5yyryCp1EGug==}
+  ink-scroll-view@0.4.1:
+    resolution: {integrity: sha512-mzfdjEWHKAMrXaWS0jABhemMF/dqiSbA4IB5b/OWyNgld7ArgsrYYGWO8vAU77tRPKBlaPKzhIaDic9f37uE0g==}
     peerDependencies:
-      ink: ^7
+      ink: ^7 || ^8
       react: '>=19.2.0'
 
   ink@8.0.0:
@@ -3233,7 +3233,7 @@ snapshots:
 
   indent-string@5.0.0: {}
 
-  ink-scroll-view@0.4.0(ink@8.0.0(@types/react@19.3.0)(react-devtools-core@8.0.0)(react@19.3.1))(react@19.3.1):
+  ink-scroll-view@0.4.1(ink@8.0.0(@types/react@19.3.0)(react-devtools-core@8.0.0)(react@19.3.1))(react@19.3.1):
     dependencies:
       ink: 8.0.0(@types/react@19.3.0)(react-devtools-core@8.0.0)(react@19.3.1)
       react: 19.3.1

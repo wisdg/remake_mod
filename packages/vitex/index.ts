@@ -1,23 +1,29 @@
-export type RNG = (max?: number, min?: number) => number
-export function random(max: number = 1, min: number = 0, rng?: RNG): number {
-    if (rng) return rng(max, min)
+/** [0, 1) 均匀随机源，缺省为 Math.random */
+export type RNG = () => number
+export function random(max: number = 1, min: number = 0, rng: RNG = Math.random): number {
     if (max < min) [max, min] = [min, max]
-    return Math.floor(Math.random() * (max - min + 1)) + min
+    return Math.floor(rng() * (max - min + 1)) + min
 }
 export function pick<T>(items: T[], rng?: RNG) {
     if (items.length === 0) return null
     return items[random(items.length - 1, 0, rng)] ?? null
 }
 export type WeightItem<T> = readonly [T, number]
-export function pickWeight<T>(items: WeightItem<T>[], rng?: RNG) {
-    if (items.length === 0) return null
-    const totalWeight = items.reduce((sum, [, weight]) => sum + weight, 0)
-    let mark = random(totalWeight - 1, 0, rng)
+/** 按权重取样：P(item) = weight / Σweight（权重可为小数） */
+export function pickWeight<T>(items: WeightItem<T>[], rng: RNG = Math.random) {
+    let total = 0
+    for (const [, weight] of items) if (weight > 0) total += weight
+    if (total <= 0) return null
+    let mark = rng() * total
+    let last: T | null = null
     for (const [item, weight] of items) {
+        if (weight <= 0) continue
         if (mark < weight) return item
         mark -= weight
+        last = item
     }
-    return null
+    // 浮点误差兜底：落在末尾
+    return last
 }
 
 export function sum(arr: number[]) {

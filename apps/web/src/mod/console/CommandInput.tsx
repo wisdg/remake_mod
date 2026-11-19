@@ -134,8 +134,9 @@ export function CommandInput({ source, history, onSubmit, onEscape, inputRef }: 
                 e.preventDefault()
                 const up = e.key === 'ArrowUp'
                 if (open) {
-                    // 到首尾即停，不循环
-                    setSelected(Math.max(0, Math.min(suggestions.length - 1, sel + (up ? -1 : 1))))
+                    // 首尾循环：第一项按 ↑ 到最后一项，最后一项按 ↓ 回到第一项
+                    const n = suggestions.length
+                    setSelected((sel + (up ? -1 : 1) + n) % n)
                     setNavigated(true)
                     return
                 }

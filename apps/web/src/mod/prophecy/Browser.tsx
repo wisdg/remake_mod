@@ -1,11 +1,11 @@
 import { useMemo } from 'react'
 import { atom, useAtom } from 'jotai'
-import { useProfile, useFateHistory } from '@remake/hooks'
-import { foresee, next } from '@remake/core'
+import { useProfile, useFateHistory, FateBudget } from '@remake/hooks'
+import { foresee, condition, next } from '@remake/core'
 import type { Branch, Choice, Foresight, GameState, NextResult, PickResult, ProfileState } from '@remake/core'
 import { talents, events, achievements } from '@remake/data'
 import { properties } from '@remake/data/etc/display'
-import { useDestine, YearBudget, percent } from '.'
+import { useDestine, percent } from '.'
 import Crumbs, { type Segment } from './Crumbs'
 
 /**
@@ -246,7 +246,7 @@ function yearAhead(state: GameState, profile: ProfileState, destiny: ReadonlyMap
     let byProfile = byDestiny.get(destiny)
     if (!byProfile) byDestiny.set(destiny, (byProfile = new WeakMap()))
     let f = byProfile.get(profile)
-    if (!f) byProfile.set(profile, (f = foresee(fate => next(state, profile, fate), { overrides: destiny, ...YearBudget })))
+    if (!f) byProfile.set(profile, (f = condition(foresee(fate => next(state, profile, fate), { overrides: destiny, ...FateBudget.year }))))
     return f
 }
 const tries = new WeakMap<Foresight<unknown>, Trie>()

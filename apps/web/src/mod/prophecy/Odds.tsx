@@ -9,26 +9,41 @@ import './Prophecy.css'
 
 const Fold = 12
 
+/** 嵌套盲盒行的前提：要到达此行，上游各盲盒须开出的值 */
+type Via = { key: string; value: unknown }[]
+
 interface ChipProps {
     point: Point
+    via?: Via
     value: unknown
     p: number
     exact: boolean
     chosen: boolean
+    /** 因与其他指定冲突而不可能 */
+    impossible?: boolean
     grade?: number
     label: string
     title?: string
 }
-function Chip({ point, value, p, exact, chosen, grade, label, title }: ChipProps) {
-    const { cheat, one } = useDestine()
+function Chip({ point, via = [], value, p, exact, chosen, impossible, grade, label, title }: ChipProps) {
+    const { cheat, one, path } = useDestine()
+    const hint = impossible
+        ? '与其他指定冲突，不可能开出；先取消冲突的指定'
+        : cheat
+          ? chosen
+              ? '点击取消指定'
+              : '点击指定为此结果（作弊）'
+          : '开启控制台后可指定结果'
     return (
         <button
-            className={`odds-chip ${grade !== undefined ? `grade-${grade}` : ''} ${chosen ? 'chosen' : ''}`}
-            disabled={!cheat}
-            title={(title ? title + '\n' : '') + (cheat ? (chosen ? '点击取消指定' : '点击指定为此结果（作弊）') : '开启控制台后可指定结果')}
+            className={`odds-chip ${grade !== undefined ? `grade-${grade}` : ''} ${chosen ? 'chosen' : ''} ${impossible ? 'impossible' : ''}`}
+            disabled={!cheat || impossible}
+            title={(title ? title + '\n' : '') + hint}
             onClick={e => {
                 e.stopPropagation()
-                one(point, chosen ? undefined : value)
+                // 指定条件分支时，一并指定其前提（上游盲盒开出本盲盒）
+                if (chosen) one(point, undefined)
+                else path([...via, { key: pointKey(point), value }])
             }}
         >
             <span className="name">{label}</span>
@@ -56,22 +71,40 @@ function Row({ label, children, warn }: { label: string; children: React.ReactNo
 }
 
 /** 盲盒会开出什么（含嵌套盲盒，条件于到达） */
-export function ReplaceOdds({ talent, foresight }: { talent: Talent['id']; foresight: Foresight<unknown> }) {
+/**
+ * 盲盒会开出什么。选项全集取自不考虑任何指定的推演（baseline），概率取自以指定为条件的推演：
+ * 因而无论冲突的指定在上方还是下方，被排除的选项都以 0% 显示为不可能。
+ */
+export function ReplaceOdds({
+    talent,
+    foresight,
+    baseline,
+}: {
+    talent: Talent['id']
+    foresight: Foresight<unknown>
+    baseline: Foresight<unknown>
+}) {
     const prophecy = useProphecy()
     if (!prophecy || !talents.get(talent)?.replacement) return null
     const rows: React.ReactNode[] = []
-    const visit = (t: Talent['id'], depth: number, seen: Set<number>) => {
+    const visit = (t: Talent['id'], depth: number, seen: Set<number>, via: Via) => {
         const point: Point = { kind: 'replace', talent: t }
         const d = distributionAt(foresight, pointKey(point))
         if (d.reach === 0) return
-        const entries = [...d.values].sort((a, b) => b[1] - a[1]) as [Talent['id'], number][]
+        const base = distributionAt(baseline, pointKey(point))
+        const all = new Set([...base.values.keys(), ...d.values.keys()]) as Set<Talent['id']>
+        const entries = [...all]
+            .map(v => [v, d.values.get(v) ?? 0, base.values.get(v) ?? 0] as const)
+            .sort((a, b) => b[1] - a[1] || b[2] - a[2])
         const label = depth === 0 ? '可能开出' : `${'　'.repeat(depth - 1)}↳ 若开出${talents.get(t)!.name}（${percent(d.reach, foresight.exact)}）`
         rows.push(
             <Row key={t} label={label} warn={d.forced === 'unreachable' ? '指定的结果已不可达' : undefined}>
                 {entries.map(([v, p]) => (
                     <Chip
                         key={v}
+                        impossible={p === 0 && !(d.forced === 'yes' && d.forcedValue === v)}
                         point={point}
+                        via={via}
                         value={v}
                         p={p}
                         exact={foresight.exact}
@@ -83,12 +116,12 @@ export function ReplaceOdds({ talent, foresight }: { talent: Talent['id']; fores
                 ))}
             </Row>,
         )
-        for (const [v] of entries) {
-            if (!talents.get(v)!.replacement || seen.has(v)) continue
-            visit(v, depth + 1, new Set([...seen, v]))
+        for (const [v, p] of entries) {
+            if (p === 0 || !talents.get(v)!.replacement || seen.has(v)) continue
+            visit(v, depth + 1, new Set([...seen, v]), [...via, { key: pointKey(point), value: v }])
         }
     }
-    visit(talent, 0, new Set([talent]))
+    visit(talent, 0, new Set([talent]), [])
     return <div className="odds">{rows}</div>
 }
 

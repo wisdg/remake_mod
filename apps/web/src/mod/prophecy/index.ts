@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from 'react'
 import { useAtomValue } from 'jotai'
-import { useDestiny, useProfile } from '@remake/hooks'
-import { foresee, pick, next, pointKey } from '@remake/core'
+import { useDestiny, useProfile, FateBudget } from '@remake/hooks'
+import { foresee, condition, pick, next, pointKey } from '@remake/core'
 import type { Choice, GameState, Point } from '@remake/core'
 import type { Talent } from '@remake/data'
 import { prophecyAtom, consoleAtom } from '../state'
@@ -10,14 +10,15 @@ export const useProphecy = () => useAtomValue(prophecyAtom)
 /** 指定命运（选分支）相当于作弊，需开启控制台 */
 export const useCheat = () => useAtomValue(consoleAtom)
 
-/** 盲盒推演很便宜；一年推演每分支约 0.3~2ms */
-export const PickBudget = { budget: 20000, samples: 4000 }
-export const YearBudget = { budget: 2000, samples: 600 }
-
-/** 开出给定天赋盲盒的全部分支 */
+/** 开出给定天赋盲盒的全部分支（以所有指定都成立为条件，与实际开盒的分布一致） */
 export function usePickForesight(list: Iterable<Talent['id']>) {
     const [destiny] = useDestiny()
-    return useMemo(() => foresee(fate => pick(list, fate), { overrides: destiny, ...PickBudget }), [list, destiny])
+    return useMemo(() => condition(foresee(fate => pick(list, fate), { overrides: destiny, ...FateBudget.pick })), [list, destiny])
+}
+
+/** 不考虑任何指定时的盲盒分支：用作“原本可能开出什么”的全集 */
+export function usePickBaseline(list: Iterable<Talent['id']>) {
+    return useMemo(() => foresee(fate => pick(list, fate), FateBudget.pick), [list])
 }
 
 /** 从某一状态推进一年的全部分支 */
@@ -25,7 +26,10 @@ export function useYearForesight(state: GameState | null) {
     const [destiny] = useDestiny()
     const [profile] = useProfile()
     return useMemo(
-        () => (state && state.life > 0 ? foresee(fate => next(state, profile, fate), { overrides: destiny, ...YearBudget }) : null),
+        () =>
+            state && state.life > 0
+                ? condition(foresee(fate => next(state, profile, fate), { overrides: destiny, ...FateBudget.year }))
+                : null,
         [state, profile, destiny],
     )
 }

@@ -1,9 +1,9 @@
 import { getDefaultStore } from 'jotai'
 import * as hooks from '@remake/hooks'
-import { Step, Mode, live } from '@remake/hooks'
+import { Step, Mode, live, openBoxes as open } from '@remake/hooks'
 import type { GameState, Properties, ProfileState } from '@remake/core'
 import * as core from '@remake/core'
-import { pick, summary, triggerEvent, propsEffect, exclude, destined, pointKey, recording } from '@remake/core'
+import { summary, triggerEvent, propsEffect, exclude, pointKey } from '@remake/core'
 import type { Point } from '@remake/core'
 import { talents, events, achievements } from '@remake/data'
 import * as data from '@remake/data'
@@ -191,7 +191,7 @@ function lifeNext(years: number, src: Source) {
     const profile = profileOf()
     try {
         for (let i = 0; i < years && s.life > 0; i++) {
-            const r = live(s, profile, fateOf())
+            const r = live(s, profile, store.get(destinyAtom))
             store.set(realizeAtom, r.realized)
             s = r.state
             setState(s)
@@ -593,13 +593,11 @@ function configGet(key: string) {
 }
 const attrName = (a: Attr) => (a === 'life' ? '生命' : properties[a])
 
-/** 本局的命运：已指定处按指定，其余按天意 */
-const fateOf = () => destined(store.get(destinyAtom))
-/** 开盲盒（与页面提交相同：记入历史并清除已生效的指定） */
+/** 开盲盒（与页面提交相同：以指定为条件抽取，记入历史并清除已生效的指定） */
 function openBoxes(list: Set<number>) {
-    const rec = recording(fateOf())
-    store.set(replacedAtom, pick(list, rec.fate))
-    store.set(realizeAtom, rec.realized, 'replace')
+    const { result, realized } = open(list, store.get(destinyAtom))
+    store.set(replacedAtom, result)
+    store.set(realizeAtom, realized, 'replace')
 }
 
 function pointText(p: Point, value: unknown): Seg[] {

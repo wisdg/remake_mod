@@ -1,9 +1,9 @@
 import { useCallback, useState } from 'react'
 import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai'
-import { pickedAtom, replacedAtom, baseAllocAtom, useFate, realizeAtom } from '.'
+import { pickedAtom, replacedAtom, baseAllocAtom, destinyAtom, realizeAtom, openBoxes } from '.'
 import { useConfig, useSetStep, Step } from '.'
 import { uniqueGenerate, startUnique, startChara } from '@remake/core'
-import { pullChara, pick, recording } from '@remake/core'
+import { pullChara } from '@remake/core'
 import type { BaseChara, PullCharaTms } from '@remake/core'
 import type { Character } from '@remake/data'
 import type { RNG } from '@remake/vitex'
@@ -73,7 +73,7 @@ export const useCharaPicker = () => {
 
 export const useCharaSubmit = () => {
     const unique = useAtomValue(uniqueAtom)
-    const fate = useFate()
+    const destiny = useAtomValue(destinyAtom)
     const realize = useSetAtom(realizeAtom)
     const setStep = useSetStep()
     const setPicked = useSetAtom(pickedAtom)
@@ -90,13 +90,13 @@ export const useCharaSubmit = () => {
                 result = startChara(picked.id)
             }
             setPicked(new Set(result.talents))
-            const rec = recording(fate)
-            setReplaced(pick(result.talents, rec.fate))
-            realize(rec.realized, 'replace')
+            const opened = openBoxes(result.talents, destiny)
+            setReplaced(opened.result)
+            realize(opened.realized, 'replace')
             setBaseAlloc(result.allocation)
             setStep(Step.Alloc)
         },
-        [unique, fate, realize, setPicked, setReplaced, setBaseAlloc, setStep],
+        [unique, destiny, realize, setPicked, setReplaced, setBaseAlloc, setStep],
     )
 }
 

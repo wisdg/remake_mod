@@ -1,11 +1,11 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { atom, useSetAtom, useAtomValue, useAtom } from 'jotai'
 import { useConfig, useProfile, useReplaced, useAlloc } from '.'
 import { useTalentReset, useAllocReset } from '.'
-import { start, next, summary, end } from '@remake/core'
+import { start, next, summary, end, pick } from '@remake/core'
 import type { GameState, Properties, NextResult } from '@remake/core'
-import type { ProfileState, Fate, Realized } from '@remake/core'
-import { destined, recording, fulfil } from '@remake/core'
+import type { ProfileState, Realized } from '@remake/core'
+import { destinedRun, fulfil } from '@remake/core'
 import type { Talent } from '@remake/data'
 
 export enum Step {
@@ -74,10 +74,26 @@ export const useGameReset = () => {
 export const useFateHistory = () => useAtomValue(fateHistoryAtom)
 export const useRealize = () => useSetAtom(realizeAtom)
 export const useDestiny = () => useAtom(destinyAtom)
-/** 本局的命运：未指定处按天意 */
-export const useFate = () => {
-    const destiny = useAtomValue(destinyAtom)
-    return useMemo(() => destined(destiny), [destiny])
+
+/**
+ * 推演上限（预言显示与实际执行共用，保证二者分布一致）：
+ * 开盲盒很便宜；推进一年每分支约 0.3~2ms。
+ */
+export const FateBudget = {
+    pick: { budget: 20000, samples: 4000 },
+    year: { budget: 2000, samples: 600 },
+} as const
+/** 开盲盒只受盲盒指定约束 */
+export const pickRelevant = (key: string) => key.startsWith('replace:')
+/** 推进一年只受这一年的事件指定、以及所持天赋的随机属性指定约束 */
+export const yearRelevant = (state: GameState) => (key: string) => {
+    if (key === `event:${state.props.current.age + 1}`) return true
+    const [kind, talent] = key.split(':')
+    return kind === 'property' && state.talents.has(Number(talent))
+}
+/** 在指定下开盲盒：以所有相关指定都成立为条件抽取结果 */
+export function openBoxes(list: Iterable<Talent['id']>, destiny: ReadonlyMap<string, unknown>) {
+    return destinedRun(fate => pick(list, fate), destiny, { relevant: pickRelevant, ...FateBudget.pick })
 }
 
 export const useMode = () => useAtomValue(modeAtom)
@@ -132,32 +148,35 @@ export const useStart = () => {
         return result.achievements
     }, [profile, allocate, spirit, tr, setStep, setState])
 }
-/** 推进一年：返回新状态、日志与实际发生的随机选择（UI 与控制台共用） */
-export function live(state: GameState, profile: ProfileState, fate?: Fate) {
-    const rec = recording(fate)
-    const { state: s, ...result } = next(state, profile, rec.fate)
+/** 推进一年（以相关指定都成立为条件）：返回新状态、日志与实际发生的随机选择（UI 与控制台共用） */
+export function live(state: GameState, profile: ProfileState, destiny: ReadonlyMap<string, unknown> = new Map()) {
+    const { result, realized } = destinedRun(fate => next(state, profile, fate), destiny, {
+        relevant: yearRelevant(state),
+        ...FateBudget.year,
+    })
+    const { state: s, ...rest } = result
     const { age, ...props } = s.props.current
-    const log: Log = { ...result, props }
-    return { state: s, log, achievements: result.achievements, realized: rec.realized }
+    const log: Log = { ...rest, props }
+    return { state: s, log, achievements: rest.achievements, realized }
 }
 
 export const useNext = () => {
     const [profile] = useProfile()
     const [state, setState] = useAtom(gameStateAtom)
     const [logs, setLogs] = useAtom(logsAtom)
-    const fate = useFate()
+    const destiny = useAtomValue(destinyAtom)
     const realize = useSetAtom(realizeAtom)
     if (!state) throw new Error('Game state is not available.')
     const ended = state.life <= 0
     const nexter = useCallback(() => {
         if (!state) throw new Error('Game state is not available.')
         if (state.life <= 0) throw new Error('Game state is already ended.')
-        const { state: s, log, achievements, realized } = live(state, profile, fate)
+        const { state: s, log, achievements, realized } = live(state, profile, destiny)
         setState(s)
         setLogs(prev => [...prev, log])
         realize(realized)
         return achievements
-    }, [state, profile, fate, setState, setLogs, realize])
+    }, [state, profile, destiny, setState, setLogs, realize])
     return [{ logs, ended }, nexter] as const
 }
 export const useGotoSummary = () => {

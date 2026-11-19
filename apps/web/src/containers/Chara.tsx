@@ -7,13 +7,14 @@ import { properties } from '@remake/data/etc/display'
 import { keys } from '@remake/vitex'
 import { toastMsg } from '@/toast'
 import Talent from '@/components/Talent'
-import { usePickForesight } from '@/mod/prophecy'
+import { usePickForesight, usePickBaseline } from '@/mod/prophecy'
 import { ReplaceOdds, PropertyOdds } from '@/mod/prophecy/Odds'
 import './Chara.css'
 
 function Details({ detail }: { detail: BaseChara }) {
     const props = convertProps(detail.property)
     const foresight = usePickForesight(detail.talent)
+    const baseline = usePickBaseline(detail.talent)
     return (
         <div className="chara-details">
             <ul className="properties">
@@ -31,7 +32,7 @@ function Details({ detail }: { detail: BaseChara }) {
                 {detail.talent.map(id => (
                     <li key={id}>
                         <Talent id={id} />
-                        <ReplaceOdds talent={id} foresight={foresight} />
+                        <ReplaceOdds talent={id} foresight={foresight} baseline={baseline} />
                         <PropertyOdds talent={id} />
                     </li>
                 ))}

@@ -3,7 +3,7 @@ import { useTalentSubmit, useSubmitIsEnable } from '@remake/hooks'
 import { PullCount, dev } from '@/config'
 import { toastMsg } from '@/toast'
 import Talent from '@/components/Talent'
-import { useProphecy, usePickForesight } from '@/mod/prophecy'
+import { useProphecy, usePickForesight, usePickBaseline } from '@/mod/prophecy'
 import { ReplaceOdds, PropertyOdds } from '@/mod/prophecy/Odds'
 import './Pick.css'
 
@@ -14,6 +14,7 @@ export function Pick() {
     const submit = useTalentSubmit()
     const prophecy = useProphecy()
     const foresight = usePickForesight(talents)
+    const baseline = usePickBaseline(talents)
     const msg = enabled
         ? '下一步'
         : `请选取 ${min == max ? min : `${min}~${max}`} 个天赋`
@@ -42,7 +43,7 @@ export function Pick() {
                         {prophecy && talents.has(id) ? (
                             <div className="prophecy-talent">
                                 <Talent id={id} selected />
-                                <ReplaceOdds talent={id} foresight={foresight} />
+                                <ReplaceOdds talent={id} foresight={foresight} baseline={baseline} />
                                 <PropertyOdds talent={id} />
                             </div>
                         ) : (

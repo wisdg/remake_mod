@@ -62,6 +62,12 @@ importers:
 
   apps/web:
     dependencies:
+      '@remake/condition':
+        specifier: workspace:*
+        version: link:../../packages/condition
+      '@remake/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       '@remake/data':
         specifier: workspace:*
         version: link:../../packages/data

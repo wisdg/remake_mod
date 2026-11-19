@@ -3,6 +3,7 @@ import { judge, judgeGrade, judgeGradeByValue } from '@/config'
 import { rates } from '@remake/data/etc/display'
 import { achievements, type Achievement } from '@remake/data'
 import { toastMsg } from '@/toast'
+import { useProphecy } from '@/mod/prophecy'
 import './Achv.css'
 
 interface AchievementProps {
@@ -11,18 +12,19 @@ interface AchievementProps {
 }
 export function AchievementItem({ id, colled }: AchievementProps) {
     const { name, grade, description, hide } = achievements.get(id)!
+    const prophecy = useProphecy()
+    const veiled = hide && !colled && !prophecy
     return (
         <li className={`achievement grade-${grade} ${colled ? 'colled' : ''}`}>
-            <span className="name">{hide && !colled ? '???' : name}</span>
-            <span className="description">
-                {hide && !colled ? '???' : description}
-            </span>
+            <span className="name">{veiled ? '???' : name}</span>
+            <span className="description">{veiled ? '???' : description}</span>
         </li>
     )
 }
 
 export function Achv() {
     const goHome = useGoHome()
+    const prophecy = useProphecy()
     const showRank = () => toastMsg('别卷了，没有排行榜', 'achv-rank')
     const [stats, sorted] = useAchv()
     const jtimes = judge('times', stats.times)
@@ -36,9 +38,11 @@ export function Achv() {
     return (
         <div className="screen achv">
             <div className="controls">
-                <button className="secondary" onClick={showRank}>
-                    排行榜
-                </button>
+                {!prophecy && (
+                    <button className="secondary" onClick={showRank}>
+                        排行榜
+                    </button>
+                )}
                 <button className="primary" onClick={goHome}>
                     返回
                 </button>
@@ -57,14 +61,14 @@ export function Achv() {
                         </span>
                     </div>
                     <div
-                        className={`prg grade-${gevent}`}
+                        className={`prg grade-${gevent} ${prophecy ? 'prophecy' : ''}`}
                         style={{ '--progress': revent } as React.CSSProperties}
                     >
                         <span className="title">事件收集率</span>
                         <span className="value">{revent}</span>
                     </div>
                     <div
-                        className={`prg grade-${gtalent}`}
+                        className={`prg grade-${gtalent} ${prophecy ? 'prophecy' : ''}`}
                         style={{ '--progress': rtalent } as React.CSSProperties}
                     >
                         <span className="title">天赋收集率</span>

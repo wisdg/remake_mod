@@ -17,6 +17,9 @@
             .talent {
                 width: 100%;
             }
+            > .prophecy-talent {
+                width: 100%;
+            }
         }
     }
 }

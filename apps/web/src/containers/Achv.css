@@ -54,6 +54,10 @@
                     border-top: 0.0625rem solid var(--grade-color);
                     box-sizing: border-box;
                 }
+                /* 预言：未收集的剩余部分以浅色填满 */
+                &.prophecy::before {
+                    background: color-mix(in oklch, var(--grade-color) 25%, transparent);
+                }
             }
         }
     }

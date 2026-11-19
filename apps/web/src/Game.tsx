@@ -11,6 +11,7 @@ import Play from '@/containers/Play'
 import Summary from '@/containers/Summary'
 import Achv from '@/containers/Achv'
 import Thanks from '@/containers/Thanks'
+import Mod from '@/mod/Mod'
 import './Game.css'
 
 export function Container() {
@@ -41,6 +42,6 @@ export function Game() {
     const saving = useWatcher()
     useEffect(() => { if (!inited) init() }, [inited, init])
     if (!inited) return <Loading />
-    return <><Container /><ToastContainer /><Saving active={saving} /></>
+    return <><Container /><ToastContainer /><Saving active={saving} /><Mod /></>
 }
 export default Game

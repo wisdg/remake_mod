@@ -3,6 +3,7 @@ import type { Properties, GameState, ProfileState } from './state'
 import { propsEffect, createFlatState } from './state'
 import { check } from '@remake/condition'
 import { pick, pickWeight, type RNG } from '@remake/vitex'
+import { chance, type Fate } from './fate'
 import { produce } from 'immer'
 import type { TriggerResult } from './game'
 
@@ -105,27 +106,18 @@ export function exclude(talent: Talent['id'], list: Iterable<Talent['id']>) {
     return null
 }
 
-function chainReplace(t: Talent['id'], ts: Set<Talent['id']>, rng?: RNG) {
+function chainReplace(t: Talent['id'], ts: Set<Talent['id']>, fate: Fate) {
     const { replacement: r } = talents.get(t)!
     if (!r) return null
-    let picked: Talent['id'] | null = null
-    if (r.talent) {
-        const filtered = r.talent.filter(([id]) => {
-            if (ts.has(id)) return false
-            return exclude(id, ts) == null
-        })
-        picked = pickWeight(filtered, rng)
-    } else if (r.grade) {
-        const filtered = GradeMap.get(r.grade)!.filter(id => {
-            if (ts.has(id)) return false
-            return exclude(id, ts) == null
-        })
-        picked = pick(filtered, rng)
-    }
-    if (!picked) return null
+    const eligible = (id: Talent['id']) => !ts.has(id) && exclude(id, ts) == null
+    let options: [Talent['id'], number][] = []
+    if (r.talent) options = r.talent.filter(([id]) => eligible(id))
+    else if (r.grade !== undefined) options = GradeMap.get(r.grade)!.filter(eligible).map(id => [id, 1])
+    const picked = fate.choose({ kind: 'replace', talent: t }, options)
+    if (picked == null) return null
     const nts = new Set(ts)
     nts.add(picked)
-    const next = chainReplace(picked, nts, rng) as Talent['id'][] | null
+    const next = chainReplace(picked, nts, fate) as Talent['id'][] | null
     if (next) return [picked, ...next]
     return [picked]
 }
@@ -137,12 +129,12 @@ export interface ReplacementResult {
 
 export function replacement(
     list: Iterable<Talent['id']>,
-    rng?: RNG,
+    fate: Fate = chance,
 ): ReplacementResult {
     const set = new Set(list)
     const chains = new Map() as ReplacementResult['chains']
     for (const talent of list) {
-        const chain = chainReplace(talent, set, rng)
+        const chain = chainReplace(talent, set, fate)
         if (!chain) continue
         chains.set(talent, chain)
         chain.forEach(t => set.add(t))
@@ -174,7 +166,8 @@ export function additionalPoints(
     return { source, points: total }
 }
 
-const EffectRandomProperties = [
+/** 随机属性天赋可能加到的属性（等概率） */
+export const RandomProperties = [
     'money',
     'strength',
     'intelligence',
@@ -185,7 +178,7 @@ const EffectRandomProperties = [
 export function trigger(
     state: GameState,
     profile: ProfileState,
-    rng?: RNG,
+    fate: Fate = chance,
 ): TriggerResult<Talent['id']> {
     const flatState = createFlatState(state, profile)
     const triggers: Talent['id'][] = []
@@ -209,8 +202,11 @@ export function trigger(
             if (effect.MNY) pe.money = effect.MNY
             if (effect.SPR) pe.spirit = effect.SPR
             if (effect.RND) {
-                const key = pick(EffectRandomProperties, rng)!
-                pe[key] = (pe[key] ?? 0) || effect.RND
+                const key = fate.choose(
+                    { kind: 'property', talent, times },
+                    RandomProperties.map(k => [k, 1] as const),
+                )!
+                pe[key] = (pe[key] ?? 0) + effect.RND
             }
             draft.props = propsEffect(draft.props, pe)
         }

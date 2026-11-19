@@ -1,9 +1,11 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { atom, useSetAtom, useAtomValue, useAtom } from 'jotai'
 import { useConfig, useProfile, useReplaced, useAlloc } from '.'
 import { useTalentReset, useAllocReset } from '.'
 import { start, next, summary, end } from '@remake/core'
 import type { GameState, Properties, NextResult } from '@remake/core'
+import type { ProfileState, Fate, Realized } from '@remake/core'
+import { destined, recording, fulfil } from '@remake/core'
 import type { Talent } from '@remake/data'
 
 export enum Step {
@@ -32,6 +34,18 @@ export const stepAtom = atom<Step>(Step.Idle)
 export const gameStateAtom = atom<GameState | null>(null)
 export const logsAtom = atom<Log[]>([])
 export const summaryAtom = atom(0)
+/** 本局被指定的随机点结果（作弊）：pointKey → 值；重开时清空 */
+export const destinyAtom = atom<ReadonlyMap<string, unknown>>(new Map())
+/** 本局实际发生的随机选择（开盲盒 + 逐年），重开时清空 */
+export const fateHistoryAtom = atom<Realized[]>([])
+/**
+ * 随机点实际发生后：记入历史，并移除已过去的指定。
+ * 开盲盒是本局第一批随机点，重新开盒时覆盖历史（mode = 'replace'）。
+ */
+export const realizeAtom = atom(null, (get, set, realized: Realized[], mode: 'append' | 'replace' = 'append') => {
+    set(destinyAtom, fulfil(get(destinyAtom), realized))
+    set(fateHistoryAtom, mode === 'replace' ? realized : [...get(fateHistoryAtom), ...realized])
+})
 
 export const useStateReset = () => {
     const setGameState = useSetAtom(gameStateAtom)
@@ -46,12 +60,24 @@ export const useGameReset = () => {
     const resetAlloc = useAllocReset()
     const resetState = useStateReset()
     const resetLogs = useLogsReset()
+    const setDestiny = useSetAtom(destinyAtom)
+    const setHistory = useSetAtom(fateHistoryAtom)
     return useCallback(() => {
         resetTalent()
         resetAlloc()
         resetState()
         resetLogs()
-    }, [resetTalent, resetAlloc, resetState, resetLogs])
+        setDestiny(new Map())
+        setHistory([])
+    }, [resetTalent, resetAlloc, resetState, resetLogs, setDestiny, setHistory])
+}
+export const useFateHistory = () => useAtomValue(fateHistoryAtom)
+export const useRealize = () => useSetAtom(realizeAtom)
+export const useDestiny = () => useAtom(destinyAtom)
+/** 本局的命运：未指定处按天意 */
+export const useFate = () => {
+    const destiny = useAtomValue(destinyAtom)
+    return useMemo(() => destined(destiny), [destiny])
 }
 
 export const useMode = () => useAtomValue(modeAtom)
@@ -106,31 +132,34 @@ export const useStart = () => {
         return result.achievements
     }, [profile, allocate, spirit, tr, setStep, setState])
 }
+/** 推进一年：返回新状态、日志与实际发生的随机选择（UI 与控制台共用） */
+export function live(state: GameState, profile: ProfileState, fate?: Fate) {
+    const rec = recording(fate)
+    const { state: s, ...result } = next(state, profile, rec.fate)
+    const { age, ...props } = s.props.current
+    const log: Log = { ...result, props }
+    return { state: s, log, achievements: result.achievements, realized: rec.realized }
+}
 
 export const useNext = () => {
     const [profile] = useProfile()
     const [state, setState] = useAtom(gameStateAtom)
     const [logs, setLogs] = useAtom(logsAtom)
-    const endRef = useRef(false)
-    const [ended, setEnded] = useState(false)
+    const fate = useFate()
+    const realize = useSetAtom(realizeAtom)
     if (!state) throw new Error('Game state is not available.')
+    const ended = state.life <= 0
     const nexter = useCallback(() => {
         if (!state) throw new Error('Game state is not available.')
-        if (endRef.current) throw new Error('Game state is already ended.')
-        const { state: s, ...result } = next(state, profile)
+        if (state.life <= 0) throw new Error('Game state is already ended.')
+        const { state: s, log, achievements, realized } = live(state, profile, fate)
         setState(s)
-        const { age, ...props } = s.props.current
-        const log = { ...result, props }
         setLogs(prev => [...prev, log])
-        if (s.life <= 0) {
-            endRef.current = true
-            setEnded(true)
-        }
-        return result.achievements
-    }, [state, profile, setState, setLogs])
+        realize(realized)
+        return achievements
+    }, [state, profile, fate, setState, setLogs, realize])
     return [{ logs, ended }, nexter] as const
 }
-
 export const useGotoSummary = () => {
     const [profile] = useProfile()
     const [state, setState] = useAtom(gameStateAtom)

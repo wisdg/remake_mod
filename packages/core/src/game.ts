@@ -8,8 +8,7 @@ import { pull, exclude, replacement, additionalPoints } from './talent'
 import { trigger as ttr } from './talent'
 import { trigger as atr } from './achievement'
 import { trigger as etr, check as ec } from './event'
-import type { RNG } from '@remake/vitex'
-import { pickWeight } from '@remake/vitex'
+import { chance, type Fate } from './fate'
 import { produce, enableMapSet } from 'immer'
 enableMapSet()
 
@@ -21,8 +20,9 @@ export interface PickResult {
     talents: ReplacementResult
     additionalPoints: AdditionalPoints
 }
-export function pick(talents: Iterable<Talent['id']>, rng?: RNG): PickResult {
-    const r = replacement(talents, rng)
+/** 天赋选定后开盲盒 */
+export function pick(talents: Iterable<Talent['id']>, fate: Fate = chance): PickResult {
+    const r = replacement(talents, fate)
     const ap = additionalPoints(r.talents)
     return { talents: r, additionalPoints: ap }
 }
@@ -51,19 +51,19 @@ export interface NextResult {
 export function next(
     state: GameState,
     profile: ProfileState,
-    rng?: RNG,
+    fate: Fate = chance,
 ): NextResult {
     let s = produce(state, draft => {
         draft.props = propsEffect(state.props, { age: 1 })
     })
     const age = s.props.current.age
-    const tr = ttr(s, profile, rng)
+    const tr = ttr(s, profile, fate)
     const events = ages.get(age)!.event
     let event: Event['id'] | null = null
     for (const level of events) {
         const filtered = level.filter(([e]) => ec(e, tr.state, profile))
         if (filtered.length < 1) continue
-        event = pickWeight(filtered, rng)
+        event = fate.choose({ kind: 'event', age }, filtered)
         break
     }
     if (event === null)

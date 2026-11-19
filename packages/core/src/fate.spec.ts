@@ -5,7 +5,7 @@ import { createState } from './state'
 import { exclude } from './talent'
 import { uniqueGenerate } from './character'
 import { pick, next } from './game'
-import { foresee, destined, distributionAt, pointKey, chance, recording, fulfil } from './fate'
+import { foresee, destined, distributionAt, pointKey, chance, recording, fulfil, condition, destinedRun } from './fate'
 import { enableMapSet } from 'immer'
 enableMapSet()
 
@@ -162,5 +162,60 @@ describe('recording / fulfil', () => {
         const left = fulfil(overrides, realized)
         expect([...left.keys()]).toEqual([pointKey({ kind: 'event', age: 5 })])
         expect(fulfil(left, realized)).toBe(left)
+    })
+})
+
+describe('以指定为条件', () => {
+    // 阳间福袋(2021) 的候选中、同时也在紫色转盘(1143) 紫色池里的天赋
+    const X = talents.get(2021)!.replacement!.talent!.map(([id]) => id).find(id => talents.get(id)!.grade === 2 && !talents.get(id)!.exclusive)!
+    const k1143 = pointKey({ kind: 'replace', talent: 1143 })
+    const k2021 = pointKey({ kind: 'replace', talent: 2021 })
+    const pins = new Map<string, unknown>([[k2021, X]])
+
+    test('后面的指定约束前面的随机点', () => {
+        const natural = distributionAt(foresee(fate => pick([1143, 2021], fate)), k1143)
+        expect(natural.values.get(X)!).toBeGreaterThan(0)
+        const f = condition(foresee(fate => pick([1143, 2021], fate), { overrides: pins }))
+        expect(f.consistent).toBe(true)
+        close(sum(f.branches.map(b => b.p)), 1)
+        const d = distributionAt(f, k1143)
+        expect(d.values.get(X) ?? 0).toBe(0)
+        // 其余结果按比例放大：P(v | 指定) ∝ P(v) × P(阳间福袋仍能开出 X | v)
+        close(sum([...d.values.values()]), 1)
+        expect(distributionAt(f, k2021).forcedValue).toBe(X)
+    })
+
+    test('实际执行从条件分布中抽取：指定总能实现', () => {
+        for (let i = 0; i < 300; i++) {
+            const { result, realized } = destinedRun(fate => pick([1143, 2021], fate), pins)
+            expect(result.talents.chains.get(2021)![0]).toBe(X)
+            expect(result.talents.chains.get(1143)![0]).not.toBe(X)
+            expect(realized.find(r => r.key === k2021)!.value).toBe(X)
+        }
+    })
+
+    test('同一年内：事件指定约束先发生的随机属性', () => {
+        // 体质 -1 + 阴间大会员(随机属性+8)：指定 0 岁“胎死腹中”(体质<0) 时，随机属性不能落在体质
+        const state = createState({ ...allocation, strength: -1 }, [1141])
+        const ev = pointKey({ kind: 'event', age: 0 })
+        const f = condition(foresee(fate => next(state, profile, fate), { overrides: new Map([[ev, 10494]]) }))
+        expect(f.consistent).toBe(true)
+        const d = distributionAt(f, pointKey({ kind: 'property', talent: 1141, times: 0 }))
+        expect(d.values.get('strength') ?? 0).toBe(0)
+        for (const k of ['money', 'intelligence', 'charm', 'spirit']) close(d.values.get(k)!, 0.25)
+        for (let i = 0; i < 50; i++) expect(destinedRun(fate => next(state, profile, fate), new Map([[ev, 10494]])).result.events[0]).toBe(10494)
+    })
+
+    test('指定无法同时满足：标记并退回“能强制则强制”', () => {
+        // 已持有阴间大会员，轮盘赌不可能再开出它
+        const bad = new Map<string, unknown>([[pointKey({ kind: 'replace', talent: 1146 }), 1141]])
+        expect(condition(foresee(fate => pick([1141, 1146], fate), { overrides: bad })).consistent).toBe(false)
+        const { result } = destinedRun(fate => pick([1141, 1146], fate), bad)
+        expect(result.talents.chains.get(1146)![0]).not.toBe(1141)
+    })
+
+    test('无相关指定时按天意直接运行', () => {
+        const { realized } = destinedRun(fate => pick([1146], fate), new Map([['event:99', 1]]), { relevant: k => k.startsWith('replace:') })
+        expect(realized).toHaveLength(1)
     })
 })

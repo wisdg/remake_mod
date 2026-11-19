@@ -197,6 +197,65 @@ export function distributionAt<R>(foresight: Foresight<R>, key: string) {
     return { reach, values, forced, forcedValue }
 }
 
+/* ---------- 以指定为条件 ---------- */
+
+/** 选择在该点的自然概率（不受指定影响） */
+const naturalOf = (c: Choice) => c.alternatives.find(([v]) => v === c.value)?.[1] ?? 0
+
+/**
+ * 以“所有指定都成立”为条件重新加权：
+ * 分支权重 × 其中被指定选择的自然概率，并去掉含不可达指定的分支，再归一化。
+ * 结果即 P(分支 | 所有在此出现的指定都取指定值)，前面的随机点因此受后面指定的约束。
+ * 若没有任何分支能同时满足全部指定，返回原预见并标记 consistent = false
+ * （此时按“走到时能强制则强制”的原语义）。
+ */
+export function condition<R>(f: Foresight<R>): Foresight<R> & { consistent: boolean } {
+    const weighted: Branch<R>[] = []
+    let total = 0
+    for (const b of f.branches) {
+        if (b.path.some(c => c.forced === 'unreachable')) continue
+        let w = b.p
+        for (const c of b.path) if (c.forced === 'yes') w *= naturalOf(c)
+        if (w <= 0) continue
+        weighted.push({ ...b, p: w })
+        total += w
+    }
+    if (total <= 0) return { ...f, consistent: false }
+    for (const b of weighted) b.p /= total
+    return { branches: weighted, exact: f.exact, consistent: true }
+}
+
+/**
+ * 在指定下实际运行一次：只考虑 relevant 的指定；没有相关指定时按天意直接运行，
+ * 否则从条件分布中抽取一条分支照其执行（与预见显示的概率一致）。
+ */
+export function destinedRun<R>(
+    run: (fate: Fate) => R,
+    overrides: ReadonlyMap<string, unknown>,
+    { relevant = () => true, budget = 20000, samples = 4000 }: { relevant?: (key: string) => boolean; budget?: number; samples?: number } = {},
+): { result: R; realized: Realized[] } {
+    const pins = new Map([...overrides].filter(([k]) => relevant(k)))
+    if (!pins.size) {
+        const rec = recording(chance)
+        return { result: run(rec.fate), realized: rec.realized }
+    }
+    const f = condition(foresee(run, { overrides: pins, budget, samples }))
+    let mark = Math.random()
+    let chosen = f.branches.at(-1)!
+    for (const b of f.branches) {
+        mark -= b.p
+        if (mark < 0) {
+            chosen = b
+            break
+        }
+    }
+    if (chosen.error !== undefined) throw chosen.error
+    return {
+        result: chosen.result as R,
+        realized: chosen.path.map(c => ({ point: c.point, key: c.key, value: c.value })),
+    }
+}
+
 /** 实际发生的一次选择 */
 export interface Realized {
     point: Point

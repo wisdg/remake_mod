@@ -2,6 +2,7 @@ import type { Character, CharacterProperty, Talent } from '@remake/data'
 import { characters, talents } from '@remake/data'
 import { type RNG, type WeightItem, pick, pickWeight } from '@remake/vitex'
 import type { Allocation } from './state'
+import { exclude } from './talent'
 
 export type BaseChara = Omit<Character, 'id' | 'name'>
 export type BaseAlloc = Omit<Allocation, 'spirit'>
@@ -22,6 +23,8 @@ export function uniqueGenerate(config: UniqueGenCfg, rng?: RNG) {
         const t = pick(ids, rng)!
         if (picked.has(t)) continue
         if (talents.get(t)!.exclusive) continue
+        // 与已选天赋互斥的组合会让事件池落空（如 生而为男 + 生而为女 在 0 岁无事件可选）
+        if (exclude(t, picked) != null) continue
         picked.add(t)
         count--
     }
